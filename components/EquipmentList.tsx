@@ -609,7 +609,7 @@ function PpmCompleteModal({
   );
 }
 
-// 升级版 RestockRequestModal：带国家代码、>8位电话校验及真实邮件发送
+// 升级版 RestockRequestModal：带国家代码、>8位电话校验、真实邮件发送及自由可编辑的 To / Cc 输入框
 function RestockRequestModal({
   equipment,
   thresholdDays,
@@ -626,17 +626,18 @@ function RestockRequestModal({
   const [countryCode, setCountryCode] = useState("+60");
   const [phone, setPhone] = useState("");
   const [isSending, setIsSending] = useState(false);
+  
+  // 核心：让 To 和 Cc 变成绝对可自由输入的 State
+  const [emailTo, setEmailTo] = useState(equipment.salespersonEmail || "jingfong_ewe@genomax.com.my");
+  const [emailCc, setEmailCc] = useState("genomaxstaff@gmail.com");
+
   const [qtyByCat, setQtyByCat] = useState<Record<string, number>>(() =>
     Object.fromEntries(lines.map((item) => [item.catNo, 1])),
   );
 
-  // 严格的电话校验：去除格式后至少 8 位数字
   const rawDigits = phone.replace(/[^0-9]/g, "");
   const isPhoneValid = rawDigits.length >= 8;
-  const canSend = endUser.trim().length > 0 && isPhoneValid && lines.length > 0 && !isSending;
-
-  const emailTo = equipment.salespersonEmail || "jingfong_ewe@genomax.com.my";
-  const emailCc = "genomaxstaff@gmail.com";
+  const canSend = endUser.trim().length > 0 && isPhoneValid && lines.length > 0 && emailTo.trim() !== "" && !isSending;
 
   const body = [
     "Dear GTMY Team,",
@@ -669,6 +670,7 @@ function RestockRequestModal({
       });
 
       if (res.ok) {
+        alert("Email sent successfully!");
         onSent();
       } else {
         alert("Failed to send email via server.");
@@ -723,13 +725,26 @@ function RestockRequestModal({
           </Field>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 font-mono text-[11px] text-slate-400">
-          <p>
-            To <span className="text-cyan-300">{emailTo}</span>
-          </p>
-          <p>
-            Cc <span className="text-cyan-300">{emailCc}</span>
-          </p>
+        {/* 真正完全解锁、可自由输入的 To 和 Cc 输入框区域 */}
+        <div className="bg-slate-900 border border-cyan-500/40 rounded-lg p-3 space-y-2 text-sm font-mono shadow-inner">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 w-8 text-xs font-bold">To:</span>
+            <input 
+              type="email"
+              value={emailTo}
+              onChange={(e) => setEmailTo(e.target.value)}
+              className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-cyan-300 focus:outline-none focus:border-cyan-400"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 w-8 text-xs font-bold">Cc:</span>
+            <input 
+              type="email"
+              value={emailCc}
+              onChange={(e) => setEmailCc(e.target.value)}
+              className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-cyan-300 focus:outline-none focus:border-cyan-400"
+            />
+          </div>
         </div>
 
         {lines.length === 0 ? (
