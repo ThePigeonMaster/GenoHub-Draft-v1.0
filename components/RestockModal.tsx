@@ -12,15 +12,18 @@ export default function RestockModal({ isOpen, onClose, equipment, selectedItems
   const [endUserName, setEndUserName] = useState('');
   const [countryCode, setCountryCode] = useState('+60');
   const [phone, setPhone] = useState('');
+  
+  // 将收件人和抄送人改为状态，允许手动修改以避免企业邮箱安全拦截
+  const [emailTo, setEmailTo] = useState(equipment?.salesRoute || 'jingfong_ewe@genomax.com.my');
+  const [emailCc, setEmailCc] = useState('genomaxstaff@gmail.com');
+  
   const [isSending, setIsSending] = useState(false);
 
   if (!isOpen) return null;
 
   const isPhoneValid = phone.replace(/[^0-9]/g, '').length >= 8;
-  const isFormValid = endUserName.trim() !== '' && isPhoneValid;
+  const isFormValid = endUserName.trim() !== '' && isPhoneValid && emailTo.trim() !== '';
 
-  const emailTo = equipment?.salesRoute || 'jingfong_ewe@genomax.com.my';
-  const emailCc = 'genomaxstaff@gmail.com';
   const equipmentRef = equipment?.ref || '2026001234';
 
   const emailBody = `Dear GTMY Team,
@@ -112,9 +115,28 @@ GTMY DO Ref: ${equipmentRef}`;
           </div>
         </div>
 
-        <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-3 mb-4 text-sm font-mono">
-          <div className="text-slate-400 mb-1">To: <span className="text-cyan-400">{emailTo}</span></div>
-          <div className="text-slate-400">Cc: <span className="text-cyan-400">{emailCc}</span></div>
+        {/* 可手动修改的 To 和 Cc 输入框 */}
+        <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-3 mb-4 space-y-2 text-sm font-mono">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 w-8">To:</span>
+            <input 
+              type="email"
+              value={emailTo}
+              onChange={(e) => setEmailTo(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300 focus:outline-none focus:border-cyan-500"
+              placeholder="recipient@domain.com"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 w-8">Cc:</span>
+            <input 
+              type="email"
+              value={emailCc}
+              onChange={(e) => setEmailCc(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300 focus:outline-none focus:border-cyan-500"
+              placeholder="cc@domain.com"
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-[150px] mb-4 space-y-3">
