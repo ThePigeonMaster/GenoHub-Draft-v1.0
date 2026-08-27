@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface RestockModalProps {
   isOpen: boolean;
@@ -12,18 +12,25 @@ export default function RestockModal({ isOpen, onClose, equipment, selectedItems
   const [countryCode, setCountryCode] = useState('+60');
   const [phone, setPhone] = useState('');
   
-  // 核心：把 To 和 Cc 直接变成可自由修改的 State 文本框
-  const [emailTo, setEmailTo] = useState(equipment?.salesRoute || 'jingfong_ewe@genomax.com.my');
+  // 使用状态存储 To 和 Cc
+  const [emailTo, setEmailTo] = useState('');
   const [emailCc, setEmailCc] = useState('genomaxstaff@gmail.com');
   
   const [isSending, setIsSending] = useState(false);
+
+  // 每次 Modal 打开或切换设备时，强制把最新的邮箱赋给 state，确保可自由修改
+  useEffect(() => {
+    if (equipment) {
+      setEmailTo(equipment.salesRoute || equipment.salespersonEmail || 'jingfong_ewe@genomax.com.my');
+    }
+  }, [equipment, isOpen]);
 
   if (!isOpen) return null;
 
   const isPhoneValid = phone.replace(/[^0-9]/g, '').length >= 8;
   const isFormValid = endUserName.trim() !== '' && isPhoneValid && emailTo.trim() !== '';
 
-  const equipmentRef = equipment?.ref || '2026001234';
+  const equipmentRef = equipment?.ref || equipment?.refNumber || '2026001234';
 
   const emailBody = `Dear GTMY Team,
 
@@ -114,7 +121,7 @@ GTMY DO Ref: ${equipmentRef}`;
           </div>
         </div>
 
-        {/* 真正可交互、可直接打字修改的 To 和 Cc 输入框区域 */}
+        {/* 真正完全解锁、可自由输入的 To 和 Cc 输入框 */}
         <div className="bg-slate-900 border border-cyan-500/40 rounded-lg p-3 mb-4 space-y-2 text-sm font-mono shadow-inner">
           <div className="flex items-center gap-2">
             <span className="text-slate-400 w-8 text-xs font-bold">To:</span>
