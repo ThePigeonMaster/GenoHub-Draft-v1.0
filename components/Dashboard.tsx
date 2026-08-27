@@ -15,7 +15,7 @@ import {
   persistOrderStatus,
   persistTenderStatus,
 } from "@/lib/operations";
-import type { AppView, ConnectionMode, InventoryItem, Order, Tender } from "@/lib/types";
+import type { AppView, ConnectionMode, InventoryItem, Order, Tender, TenderStatus } from "@/lib/types";
 
 const titles: Record<AppView, { heading: string; sub: string }> = {
   overview: { heading: "Operations overview", sub: "Sales, stock risk, and tender pipeline" },
@@ -74,8 +74,9 @@ export function Dashboard() {
     );
     setBusyOrders((current) => new Set(current).add(id));
 
-    const { error } =
+    const res =
       modeRef.current === "live" ? await persistOrderStatus(id, "Approved") : { error: null };
+    const error = (res as { error?: string | null })?.error ?? null;
 
     setBusyOrders((current) => {
       const next = new Set(current);
@@ -100,10 +101,12 @@ export function Dashboard() {
       );
       setBusyInventory((current) => new Set(current).add(id));
 
-      const { error } =
+      const res =
         modeRef.current === "live"
           ? await persistInventoryQuantity(id, nextQty)
           : { error: null };
+      const error = (res as { error?: string | null })?.error ?? null;
+
       setBusyInventory((current) => {
         const next = new Set(current);
         next.delete(id);
@@ -127,15 +130,17 @@ export function Dashboard() {
 
       setTenders((current) =>
         current.map((tender) =>
-          tender.id === id ? { ...tender, status: "Approved" } : tender,
+          tender.id === id ? { ...tender, status: "Approved" as TenderStatus } : tender,
         ),
       );
       setBusyTenders((current) => new Set(current).add(id));
 
-      const { error } =
+      const res =
         modeRef.current === "live"
           ? await persistTenderStatus(id, "Approved")
           : { error: null };
+      const error = (res as { error?: string | null })?.error ?? null;
+
       setBusyTenders((current) => {
         const next = new Set(current);
         next.delete(id);

@@ -178,6 +178,7 @@ export function EquipmentList() {
   const [expiryThresholdDays, setExpiryThresholdDays] = useState(30);
   const [restockOpen, setRestockOpen] = useState(false);
   const [inboundOpen, setInboundOpen] = useState(false);
+  const [ppmOpen, setPpmOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const selected = equipments.find((row) => row.id === selectedId) ?? null;
@@ -188,6 +189,20 @@ export function EquipmentList() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(null), 4200);
+  }
+
+  function updatePpm(payload: { equipmentId: string; nextPpm: string; completedBy: string }) {
+    setEquipments((current) =>
+      current.map((machine) => {
+        if (machine.id !== payload.equipmentId) return machine;
+        return {
+          ...machine,
+          lastPpm: new Date().toISOString().split("T")[0],
+          nextPpm: payload.nextPpm,
+        };
+      })
+    );
+    showToast(`PPM completed by ${payload.completedBy}. Next PPM updated to ${payload.nextPpm}`);
   }
 
   function inboundLot(payload: {
@@ -245,9 +260,11 @@ export function EquipmentList() {
             setSelectedId(null);
             setRestockOpen(false);
             setInboundOpen(false);
+            setPpmOpen(false);
           }}
           onRestock={() => setRestockOpen(true)}
           onInbound={() => setInboundOpen(true)}
+          onOpenPpm={() => setPpmOpen(true)}
         />
       ) : (
         <EquipmentTable rows={equipments} onOpen={(id) => setSelectedId(id)} />
@@ -260,7 +277,7 @@ export function EquipmentList() {
           onClose={() => setRestockOpen(false)}
           onSent={() => {
             setRestockOpen(false);
-            showToast("Your message has been received! We will get back to you soon!");
+            showToast("Your message has been received! Email sent successfully!");
           }}
         />
       ) : null}
@@ -273,6 +290,17 @@ export function EquipmentList() {
             inboundLot({ ...payload, equipmentId: selected.id });
             setInboundOpen(false);
             showToast(`Inbound posted for Cat# ${payload.catNo}. Stock engine refreshed.`);
+          }}
+        />
+      ) : null}
+
+      {selected && ppmOpen ? (
+        <PpmCompleteModal
+          equipment={selected}
+          onClose={() => setPpmOpen(false)}
+          onConfirm={(payload) => {
+            updatePpm({ ...payload, equipmentId: selected.id });
+            setPpmOpen(false);
           }}
         />
       ) : null}
@@ -344,6 +372,7 @@ function EquipmentDetail({
   onBack,
   onRestock,
   onInbound,
+  onOpenPpm,
 }: {
   equipment: Equipment;
   expiryThresholdDays: number;
@@ -352,6 +381,7 @@ function EquipmentDetail({
   onBack: () => void;
   onRestock: () => void;
   onInbound: () => void;
+  onOpenPpm: () => void;
 }) {
   return (
     <div className="space-y-5 px-5 py-5">
@@ -392,7 +422,24 @@ function EquipmentDetail({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <MetaCard label="Last PPM" value={equipment.lastPpm} />
-        <MetaCard label="Next PPM" value={equipment.nextPpm} />
+        
+        {/* Next PPM 带 [Completed] 按钮 */}
+        <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col justify-between">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Next PPM</p>
+            <p className="mt-1 font-mono text-sm text-slate-100">{equipment.nextPpm}</p>
+          </div>
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={onOpenPpm}
+              className="rounded bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition"
+            >
+              [Completed]
+            </button>
+          </div>
+        </div>
+
         <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
           <span className="block font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
             Expiry threshold (days)
@@ -497,6 +544,72 @@ function MetaCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+// PPM 完成确认弹窗
+function PpmCompleteModal({
+  equipment,
+  onClose,
+  onConfirm,
+}: {
+  equipment: Equipment;
+  onClose: () => void;
+  onConfirm: (payload: { nextPpm: string; completedBy: string }) => void;
+}) {
+  const [completedBy, setCompletedBy] = useState("Beh Meng Hua");
+  const [nextPpm, setNextPpm] = useState("");
+
+  const canConfirm = nextPpm.trim().length > 0;
+
+  return (
+    <Modal
+      title="Complete PPM Service"
+      subtitle={`Equipment: ${equipment.name}`}
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        <Field label="Completed by">
+          <select
+            className={inputClass}
+            value={completedBy}
+            onChange={(e) => setCompletedBy(e.target.value)}
+          >
+            <option value="Beh Meng Hua">Beh Meng Hua</option>
+            <option value="David Chung Tze Yang">David Chung Tze Yang</option>
+          </select>
+        </Field>
+
+        <Field label="Next PPM date">
+          <input
+            className={inputClass}
+            type="date"
+            value={nextPpm}
+            onChange={(e) => setNextPpm(e.target.value)}
+            style={{ colorScheme: "dark" }}
+          />
+        </Field>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canConfirm}
+            onClick={() => onConfirm({ nextPpm, completedBy })}
+            className="rounded-lg bg-cyan-400 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
+          >
+            Confirm PPM Complete
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// 升级版 RestockRequestModal：带国家代码、>8位电话校验及真实邮件发送
 function RestockRequestModal({
   equipment,
   thresholdDays,
@@ -510,21 +623,63 @@ function RestockRequestModal({
 }) {
   const lines = useMemo(() => restockCandidates(equipment, thresholdDays), [equipment, thresholdDays]);
   const [endUser, setEndUser] = useState("");
+  const [countryCode, setCountryCode] = useState("+60");
   const [phone, setPhone] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [qtyByCat, setQtyByCat] = useState<Record<string, number>>(() =>
     Object.fromEntries(lines.map((item) => [item.catNo, 1])),
   );
 
+  // 严格的电话校验：去除格式后至少 8 位数字
+  const rawDigits = phone.replace(/[^0-9]/g, "");
+  const isPhoneValid = rawDigits.length >= 8;
+  const canSend = endUser.trim().length > 0 && isPhoneValid && lines.length > 0 && !isSending;
+
+  const emailTo = equipment.salespersonEmail || "jingfong_ewe@genomax.com.my";
+  const emailCc = "genomaxstaff@gmail.com";
+
   const body = [
     "Dear GTMY Team,",
+    "",
     `I am ${endUser.trim() || "[End-User Name]"} from ${equipment.location}. We require restock of these reagents for our ${equipment.name}:`,
     ...lines.map(
       (item, index) => `${index + 1}. cat# ${item.catNo} [qty: ${qtyByCat[item.catNo] ?? 1}]`,
     ),
-    `Thanks, ${equipment.refNumber}`,
+    "",
+    "Thanks and regards",
+    "",
+    endUser.trim() || "[End-User Name]",
+    "",
+    `GTMY DO Ref: ${equipment.refNumber}`,
   ].join("\n");
 
-  const canSend = phone.trim().length > 0 && lines.length > 0;
+  const handleSendEmail = async () => {
+    if (!canSend) return;
+    setIsSending(true);
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailTo,
+          cc: emailCc,
+          subject: `Restock Request - Ref ${equipment.refNumber}`,
+          text: body,
+        }),
+      });
+
+      if (res.ok) {
+        onSent();
+      } else {
+        alert("Failed to send email via server.");
+        setIsSending(false);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error while sending email.");
+      setIsSending(false);
+    }
+  };
 
   return (
     <Modal
@@ -542,22 +697,38 @@ function RestockRequestModal({
               placeholder="Name on the request"
             />
           </Field>
+          
           <Field label="Phone number (mandatory)">
-            <input
-              className={inputClass}
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              placeholder="Required before send"
-            />
+            <div className="flex gap-2">
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="+60">+60</option>
+                <option value="+65">+65</option>
+                <option value="+62">+62</option>
+                <option value="+86">+86</option>
+              </select>
+              <input
+                className={`${inputClass} flex-1`}
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="e.g. 4-8294019"
+              />
+            </div>
+            {!isPhoneValid && phone.length > 0 && (
+              <span className="text-[10px] text-rose-400 mt-1 block">Must be at least 8 digits</span>
+            )}
           </Field>
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 font-mono text-[11px] text-slate-400">
           <p>
-            To <span className="text-cyan-300">gtmy@genomax.com.my</span>
+            To <span className="text-cyan-300">{emailTo}</span>
           </p>
           <p>
-            Cc <span className="text-cyan-300">{equipment.salespersonEmail}</span>
+            Cc <span className="text-cyan-300">{emailCc}</span>
           </p>
         </div>
 
@@ -606,10 +777,10 @@ function RestockRequestModal({
           <button
             type="button"
             disabled={!canSend}
-            onClick={onSent}
+            onClick={handleSendEmail}
             className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 shadow-[0_0_20px_rgba(52,211,153,0.35)] disabled:opacity-40"
           >
-            Send
+            {isSending ? "Sending..." : "Send"}
           </button>
         </div>
       </div>
