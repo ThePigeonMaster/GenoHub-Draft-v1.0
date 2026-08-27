@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 
-// 根据你的实际类型调整
 interface RestockModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -13,7 +12,7 @@ export default function RestockModal({ isOpen, onClose, equipment, selectedItems
   const [countryCode, setCountryCode] = useState('+60');
   const [phone, setPhone] = useState('');
   
-  // 将收件人和抄送人改为状态，允许手动修改以避免企业邮箱安全拦截
+  // 核心：把 To 和 Cc 直接变成可自由修改的 State 文本框
   const [emailTo, setEmailTo] = useState(equipment?.salesRoute || 'jingfong_ewe@genomax.com.my');
   const [emailCc, setEmailCc] = useState('genomaxstaff@gmail.com');
   
@@ -115,31 +114,29 @@ GTMY DO Ref: ${equipmentRef}`;
           </div>
         </div>
 
-        {/* 可手动修改的 To 和 Cc 输入框 */}
-        <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-3 mb-4 space-y-2 text-sm font-mono">
+        {/* 真正可交互、可直接打字修改的 To 和 Cc 输入框区域 */}
+        <div className="bg-slate-900 border border-cyan-500/40 rounded-lg p-3 mb-4 space-y-2 text-sm font-mono shadow-inner">
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 w-8">To:</span>
+            <span className="text-slate-400 w-8 text-xs font-bold">To:</span>
             <input 
               type="email"
               value={emailTo}
               onChange={(e) => setEmailTo(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300 focus:outline-none focus:border-cyan-500"
-              placeholder="recipient@domain.com"
+              className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-cyan-300 focus:outline-none focus:border-cyan-400"
             />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 w-8">Cc:</span>
+            <span className="text-slate-400 w-8 text-xs font-bold">Cc:</span>
             <input 
               type="email"
               value={emailCc}
               onChange={(e) => setEmailCc(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300 focus:outline-none focus:border-cyan-500"
-              placeholder="cc@domain.com"
+              className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-cyan-300 focus:outline-none focus:border-cyan-400"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-[150px] mb-4 space-y-3">
+        <div className="flex-1 overflow-y-auto min-h-[120px] mb-4 space-y-3">
           {selectedItems.map((item, idx) => (
             <div key={idx} className="bg-slate-900 border border-slate-700 rounded-md p-3 flex justify-between items-center">
               <div>
@@ -157,7 +154,7 @@ GTMY DO Ref: ${equipmentRef}`;
           <textarea 
             readOnly
             value={emailBody}
-            className="w-full bg-transparent text-slate-300 text-sm font-mono resize-none h-40 focus:outline-none"
+            className="w-full bg-transparent text-slate-300 text-sm font-mono resize-none h-32 focus:outline-none"
           />
         </div>
 
