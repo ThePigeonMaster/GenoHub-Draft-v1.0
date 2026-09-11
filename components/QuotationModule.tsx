@@ -173,19 +173,29 @@ export function QuotationModule() {
 
   return (
     <div className="min-h-screen bg-slate-950 p-6 flex gap-6">
-      {/* Print stylesheet to ensure clean A4 output without control panel */}
+      {/* Bulletproof print isolation stylesheet: hides everything except #printable-quotation */}
       <style>{`
         @media print {
-          body { background: white !important; }
-          .print\\:hidden { display: none !important; }
+          body * {
+            visibility: hidden;
+          }
+          #printable-quotation, #printable-quotation * {
+            visibility: visible;
+          }
           #printable-quotation {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
             box-shadow: none !important;
             border: none !important;
-            margin: 0 !important;
-            width: 210mm !important;
-            min-height: 297mm !important;
           }
-          @page { size: A4 portrait; margin: 10mm; }
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
         }
       `}</style>
 
@@ -345,10 +355,10 @@ export function QuotationModule() {
           <div className="p-[10mm] text-xs font-sans">
             {style === 'MG' && (
               <div>
-                {/* MG Header with 1.5x scaled logos */}
+                {/* MG Header with 1.3x MG logo and original size AC logo */}
                 <div className="flex justify-between items-start mb-6 border-b-2 border-blue-600 pb-4">
-                  <img src="/MGLOGO.png" alt="Molecular Genomics" className="h-[108px] object-contain" />
-                  <img src="/AC LOGO.png" alt="Agilent Certified" className="h-36 object-contain" />
+                  <img src="/MGLOGO.png" alt="Molecular Genomics" className="h-[62px] object-contain" />
+                  <img src="/AC LOGO.png" alt="Agilent Certified" className="h-16 object-contain" />
                 </div>
 
                 <div className="flex justify-between items-end mb-6">
@@ -461,9 +471,9 @@ export function QuotationModule() {
 
             {style === 'MGEN' && (
               <div>
-                {/* MGEN Header with 1.5x scaled logo and email omitted */}
+                {/* MGEN Header with 1.3x MGEN logo and email omitted */}
                 <div className="flex justify-between items-start mb-6">
-                  <img src="/MGEN LOGO.png" alt="MGEN" className="h-[126px] object-contain" />
+                  <img src="/MGEN LOGO.png" alt="MGEN" className="h-[72px] object-contain" />
                   <div className="text-right text-[10px] font-bold leading-tight">
                     MGEN Bioteknologi Sdn Bhd<br />
                     No 61-02, Medan Cahaya<br />
