@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { KPICardsSkeleton, TableSkeleton } from "@/components/Skeleton";
 import { EquipmentList } from "@/components/EquipmentList";
 import { TenderTable } from "@/components/TenderTable";
+import { QuotationModule } from "@/components/QuotationModule"; // 引入我们刚才的报价单模块
 import { fallbackInventory, fallbackOrders, fallbackTenders } from "@/lib/fallback-data";
 import {
   fetchOperationsData,
@@ -17,12 +18,14 @@ import {
 } from "@/lib/operations";
 import type { AppView, ConnectionMode, InventoryItem, Order, Tender, TenderStatus } from "@/lib/types";
 
+// 加上了 quotations 的标题与副标题
 const titles: Record<AppView, { heading: string; sub: string }> = {
   overview: { heading: "Operations overview", sub: "Sales, stock risk, and tender pipeline" },
   orders: { heading: "Order management", sub: "Approve and track fulfillment" },
   inventory: { heading: "Inventory", sub: "Consumable kits and formulation parameters" },
   tenders: { heading: "Tender management", sub: "Review submissions before award" },
   equipment: { heading: "Equipment", sub: "Assets and bill of materials" },
+  quotations: { heading: "Quotation Generator", sub: "Instant MG & MGEN compliant PDF generation" },
 };
 
 export function Dashboard() {
@@ -231,6 +234,9 @@ export function Dashboard() {
                 />
               )}
               {(view === "overview" || view === "equipment") && <EquipmentList />}
+              
+              {/* 新增：当点击 Quotations 时渲染报价单模块 */}
+              {view === "quotations" && <QuotationModule />}
             </>
           )}
         </div>

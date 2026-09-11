@@ -2,12 +2,14 @@
 
 import type { AppView } from "@/lib/types";
 
+// 在这里新增了 quotations 选项
 const items: { id: AppView; label: string; caption: string }[] = [
   { id: "overview", label: "Command", caption: "Live ops picture" },
   { id: "orders", label: "Orders", caption: "Credit & dispatch" },
   { id: "inventory", label: "Inventory", caption: "Lots & BOM" },
   { id: "tenders", label: "Tenders", caption: "Bid desk" },
   { id: "equipment", label: "Equipment", caption: "Assets & BOM" },
+  { id: "quotations", label: "Quotations", caption: "Sales & Bids" },
 ];
 
 type SidebarProps = {

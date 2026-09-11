@@ -81,7 +81,8 @@ export type Tender = {
   compliance: ComplianceItem[];
 };
 
-export type AppView = "overview" | "orders" | "inventory" | "tenders" | "equipment";
+// 在这里加上了 "quotations"
+export type AppView = "overview" | "orders" | "inventory" | "tenders" | "equipment" | "quotations";
 
 export type ConnectionMode = "loading" | "live" | "demo";
 
