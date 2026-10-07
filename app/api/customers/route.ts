@@ -5,13 +5,19 @@ export const dynamic = 'force-dynamic';
 
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
+function fail(label: string, error: unknown, status = 500) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`${label} failed:`, error);
+  // `error` and `message` both carry the exact text so any frontend can show it.
+  return NextResponse.json({ error: message, message }, { status });
+}
+
 export async function GET() {
   try {
     const customers = await prisma.customer.findMany({ orderBy: { name: 'asc' } });
     return NextResponse.json(customers);
   } catch (error) {
-    console.error('GET /api/customers failed:', error);
-    return NextResponse.json({ error: 'Failed to load customers' }, { status: 500 });
+    return fail('GET /api/customers', error);
   }
 }
 
@@ -20,7 +26,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const name = str(body?.name);
     if (!name) {
-      return NextResponse.json({ error: 'Customer name is required' }, { status: 400 });
+      return fail('POST /api/customers', new Error('Customer name is required'), 400);
     }
 
     const customer = await prisma.customer.create({
@@ -35,7 +41,30 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(customer, { status: 201 });
   } catch (error) {
-    console.error('POST /api/customers failed:', error);
-    return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 });
+    return fail('POST /api/customers', error);
+  }
+}
+
+// DELETE /api/customers?id=<customerId>   (or JSON body: { "id": "<customerId>" })
+export async function DELETE(request: Request) {
+  try {
+    let id = new URL(request.url).searchParams.get('id');
+
+    if (!id) {
+      const body = await request.json().catch(() => null);
+      id = typeof body?.id === 'string' ? body.id : null;
+    }
+    if (!id) {
+      return fail('DELETE /api/customers', new Error('Customer id is required'), 400);
+    }
+
+    // Quotation.customerId is onDelete: SetNull, so saved quotations are kept.
+    await prisma.customer.delete({ where: { id } });
+    return NextResponse.json({ success: true, id });
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2025') {
+      return fail('DELETE /api/customers', new Error('Customer not found (already deleted?)'), 404);
+    }
+    return fail('DELETE /api/customers', error);
   }
 }

@@ -9,6 +9,15 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+function fail(label: string, error: unknown, status = 500) {
+  const code = (error as { code?: string })?.code;
+  const raw = error instanceof Error ? error.message : String(error);
+  // Prisma messages are multi-line; the useful part is at the end, so keep it all.
+  const message = code ? `[${code}] ${raw}` : raw;
+  console.error(`${label} failed:`, error);
+  return NextResponse.json({ error: message, message, code }, { status });
+}
+
 export async function GET() {
   try {
     const quotations = await prisma.quotation.findMany({
@@ -17,8 +26,7 @@ export async function GET() {
     });
     return NextResponse.json(quotations);
   } catch (error) {
-    console.error('GET /api/quotations failed:', error);
-    return NextResponse.json({ error: 'Failed to load quotations' }, { status: 500 });
+    return fail('GET /api/quotations', error);
   }
 }
 
@@ -29,24 +37,25 @@ export async function POST(req: Request) {
 
     const quoteNo = str(body?.quoteNo).trim();
     if (!quoteNo) {
-      return NextResponse.json({ error: 'Quotation No. is required' }, { status: 400 });
+      return fail('POST /api/quotations', new Error('Quotation No. is required'), 400);
     }
     if (!Array.isArray(body.items)) {
-      return NextResponse.json({ error: 'items must be an array' }, { status: 400 });
+      return fail('POST /api/quotations', new Error('items must be an array'), 400);
     }
 
+    // Plain scalar rows only: no ids, no quotationId. Prisma fills those in.
     const items = body.items.map((it: Record<string, unknown>, index: number) => ({
       position: index,
-      catNo: str(it.catNo),
-      desc: str(it.desc),
-      qty: num(it.qty),
-      price: num(it.price),
+      catNo: str(it?.catNo),
+      desc: str(it?.desc),
+      qty: num(it?.qty),
+      price: num(it?.price),
     }));
 
     // Totals are always recomputed on the server; the client value is never trusted.
     const subtotal = items.reduce((acc: number, it: { qty: number; price: number }) => acc + it.qty * it.price, 0);
 
-    const data = {
+    const fields = {
       quoteNo,
       style: body.style === 'MGEN' ? 'MGEN' : 'MG',
       date: str(body.date),
@@ -62,36 +71,72 @@ export async function POST(req: Request) {
       mobile: str(body.mobile),
       subtotal,
       total: subtotal,
-      customerId: typeof body.customerId === 'string' && body.customerId ? body.customerId : null,
     };
 
+    const customerId = typeof body.customerId === 'string' && body.customerId ? body.customerId : null;
     const include = { items: { orderBy: { position: 'asc' as const } } };
 
-    const saved = body.id
-      ? await prisma.quotation.update({
-          where: { id: String(body.id) },
-          // deleteMany + create run inside the same nested write, so it is atomic.
-          data: { ...data, items: { deleteMany: {}, create: items } },
-          include,
-        })
-      : await prisma.quotation.create({
-          data: { ...data, items: { create: items } },
-          include,
-        });
+    let saved;
+    if (body.id) {
+      // UPDATE: deleteMany + create inside one nested write, so it is atomic.
+      saved = await prisma.quotation.update({
+        where: { id: String(body.id) },
+        data: {
+          ...fields,
+          customer: customerId ? { connect: { id: customerId } } : { disconnect: true },
+          items: { deleteMany: {}, create: items },
+        },
+        include,
+      });
+    } else {
+      // CREATE
+      saved = await prisma.quotation.create({
+        data: {
+          ...fields,
+          ...(customerId ? { customer: { connect: { id: customerId } } } : {}),
+          items: { create: items },
+        },
+        include,
+      });
+    }
 
     return NextResponse.json(saved, { status: body.id ? 200 : 201 });
   } catch (error) {
     const code = (error as { code?: string })?.code;
     if (code === 'P2002') {
-      return NextResponse.json(
-        { error: 'A quotation with this Quotation No. already exists.' },
-        { status: 409 },
-      );
+      return fail('POST /api/quotations', new Error('A quotation with this Quotation No. already exists.'), 409);
     }
     if (code === 'P2025') {
-      return NextResponse.json({ error: 'Quotation not found (it may have been deleted).' }, { status: 404 });
+      return fail(
+        'POST /api/quotations',
+        new Error('Record not found: the quotation or the selected customer no longer exists.'),
+        404,
+      );
     }
-    console.error('POST /api/quotations failed:', error);
-    return NextResponse.json({ error: 'Failed to save quotation' }, { status: 500 });
+    return fail('POST /api/quotations', error);
+  }
+}
+
+// DELETE /api/quotations?id=<quotationId>   (or JSON body: { "id": "<quotationId>" })
+export async function DELETE(request: Request) {
+  try {
+    let id = new URL(request.url).searchParams.get('id');
+
+    if (!id) {
+      const body = await request.json().catch(() => null);
+      id = typeof body?.id === 'string' ? body.id : null;
+    }
+    if (!id) {
+      return fail('DELETE /api/quotations', new Error('Quotation id is required'), 400);
+    }
+
+    // QuotationItem.quotationId is onDelete: Cascade, so the items are removed with it.
+    await prisma.quotation.delete({ where: { id } });
+    return NextResponse.json({ success: true, id });
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2025') {
+      return fail('DELETE /api/quotations', new Error('Quotation not found (already deleted?)'), 404);
+    }
+    return fail('DELETE /api/quotations', error);
   }
 }

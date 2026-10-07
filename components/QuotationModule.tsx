@@ -47,8 +47,10 @@ const EMPTY_CUSTOMER = { name: '', institute: '', department: '', address: '', p
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error || `Request failed (${res.status})`);
+  const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+  if (!res.ok) {
+    throw new Error(data.message || data.error || `Request failed (${res.status} ${res.statusText})`);
+  }
   return data as T;
 }
 
@@ -259,6 +261,42 @@ export function QuotationModule() {
     if (c) applyCustomer(c);
   }
 
+  async function handleDeleteQuote() {
+    const q = savedQuotes.find((x) => x.id === currentQuoteId);
+    if (!q) return;
+    if (!window.confirm(`Delete saved quotation ${q.quoteNo}? This cannot be undone.`)) return;
+    setSaveBusy(true);
+    try {
+      await api<{ success: boolean }>(`/api/quotations?id=${encodeURIComponent(q.id)}`, { method: 'DELETE' });
+      setCurrentQuoteId(null); // the form stays as an unsaved draft
+      await loadQuotes();
+      setStatus({ kind: 'ok', text: `Quotation ${q.quoteNo} deleted.` });
+    } catch (e) {
+      window.alert('Error: ' + (e as Error).message);
+      setStatus({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  async function handleDeleteCustomer() {
+    const c = customers.find((x) => x.id === selectedCustomerId);
+    if (!c) return;
+    if (!window.confirm(`Delete customer "${c.name}"? Saved quotations are kept.`)) return;
+    setCustomerBusy(true);
+    try {
+      await api<{ success: boolean }>(`/api/customers?id=${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+      setSelectedCustomerId('');
+      await loadCustomers();
+      setStatus({ kind: 'ok', text: `Customer "${c.name}" deleted.` });
+    } catch (e) {
+      window.alert('Error: ' + (e as Error).message);
+      setStatus({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setCustomerBusy(false);
+    }
+  }
+
   async function handleAddCustomer() {
     if (!newCustomer.name.trim()) {
       setStatus({ kind: 'error', text: 'Customer name is required.' });
@@ -341,8 +379,10 @@ export function QuotationModule() {
       setItems(saved.items.map((it) => ({ id: it.id, catNo: it.catNo, desc: it.desc, qty: it.qty, price: it.price })));
       await loadQuotes();
       setStatus({ kind: 'ok', text: `Quotation ${saved.quoteNo} saved.` });
+      window.alert('Saved successfully!');
     } catch (e) {
       setStatus({ kind: 'error', text: (e as Error).message });
+      window.alert('Error: ' + (e as Error).message);
     } finally {
       setSaveBusy(false);
     }
@@ -491,6 +531,16 @@ export function QuotationModule() {
             >
               ↻
             </button>
+            {currentQuoteId && (
+              <button
+                type="button"
+                onClick={handleDeleteQuote}
+                disabled={saveBusy}
+                className="shrink-0 px-2 rounded bg-red-600/90 hover:bg-red-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wide"
+              >
+                Delete
+              </button>
+            )}
           </div>
           {currentQuoteId && (
             <p className="text-[10px] font-mono text-cyan-500/80 mt-1">Editing saved quotation — Save will update it.</p>
@@ -534,14 +584,26 @@ export function QuotationModule() {
         <div className="space-y-3">
           <div>
             <FieldLabel>Select Saved Customer</FieldLabel>
-            <select className={inputClass} value={selectedCustomerId} onChange={(e) => handleSelectCustomer(e.target.value)}>
-              <option value="">— Choose a customer —</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{c.institute ? ` — ${c.institute}` : ''}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select className={inputClass} value={selectedCustomerId} onChange={(e) => handleSelectCustomer(e.target.value)}>
+                <option value="">— Choose a customer —</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.institute ? ` — ${c.institute}` : ''}
+                  </option>
+                ))}
+              </select>
+              {selectedCustomerId && (
+                <button
+                  type="button"
+                  onClick={handleDeleteCustomer}
+                  disabled={customerBusy}
+                  className="shrink-0 px-2 rounded bg-red-600/90 hover:bg-red-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wide"
+                >
+                  Delete Customer
+                </button>
+              )}
+            </div>
           </div>
           <button
             type="button"
