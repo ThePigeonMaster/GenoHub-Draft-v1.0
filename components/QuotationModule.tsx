@@ -1,5 +1,8 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import Docxtemplater from 'docxtemplater';
+import PizZip from 'pizzip';
+import { saveAs } from 'file-saver';
 
 type StyleType = 'MG' | 'MGEN';
 
@@ -9,6 +12,44 @@ interface QuoteItem {
   desc: string;
   qty: number;
   price: number;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  institute: string;
+  department: string;
+  address: string;
+  phone: string;
+  email: string;
+}
+
+interface SavedQuote {
+  id: string;
+  quoteNo: string;
+  style: string;
+  date: string;
+  billTo: string;
+  shipTo: string;
+  phone: string;
+  fax: string;
+  email: string;
+  validity: string;
+  payment: string;
+  delivery: string;
+  salesperson: string;
+  mobile: string;
+  customerId: string | null;
+  items: { id: string; catNo: string; desc: string; qty: number; price: number }[];
+}
+
+const EMPTY_CUSTOMER = { name: '', institute: '', department: '', address: '', phone: '', email: '' };
+
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error || `Request failed (${res.status})`);
+  return data as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -32,6 +73,15 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function money(value: number): string {
+  return (Number.isFinite(value) ? value : 0).toFixed(2);
+}
+
+function quotationFileName(quoteNo: string): string {
+  const safe = quoteNo.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() || 'draft';
+  return `Quotation_${safe}.docx`;
 }
 
 function DescriptionLines({ text }: { text: string }) {
@@ -125,13 +175,54 @@ export function QuotationModule() {
   const [salesperson, setSalesperson] = useState(MG_DEFAULTS.salesperson);
   const [mobile, setMobile] = useState(MG_DEFAULTS.mobile);
   const [items, setItems] = useState<QuoteItem[]>(MG_DEFAULTS.items);
+  const [wordBusy, setWordBusy] = useState(false);
+
+  // ---- ERP state: customer book + saved quotations ----
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER);
+  const [customerBusy, setCustomerBusy] = useState(false);
+
+  const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
+  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  async function loadCustomers() {
+    try {
+      setCustomers(await api<Customer[]>('/api/customers'));
+    } catch (e) {
+      setStatus({ kind: 'error', text: `Could not load customers: ${(e as Error).message}` });
+    }
+  }
+
+  async function loadQuotes() {
+    try {
+      setSavedQuotes(await api<SavedQuote[]>('/api/quotations'));
+    } catch (e) {
+      setStatus({ kind: 'error', text: `Could not load saved quotations: ${(e as Error).message}` });
+    }
+  }
 
   useEffect(() => {
-    if (style === 'MGEN') {
+    loadCustomers();
+    loadQuotes();
+  }, []);
+
+  // Style switching loads that style's defaults (replaces the old useEffect, which would
+  // have wiped a saved quotation as soon as its style was applied).
+  function switchStyle(next: StyleType) {
+    setStyle(next);
+    setCurrentQuoteId(null);
+    setSelectedCustomerId('');
+    if (next === 'MGEN') {
       setQuoteNo(MGEN_DEFAULTS.quoteNo);
       setDate(MGEN_DEFAULTS.date);
       setBillTo(MGEN_DEFAULTS.billTo);
+      setShipTo('');
       setPhone(MGEN_DEFAULTS.phone);
+      setFax('');
       setEmail(MGEN_DEFAULTS.email);
       setValidity(MGEN_DEFAULTS.validity);
       setPayment(MGEN_DEFAULTS.payment);
@@ -154,7 +245,108 @@ export function QuotationModule() {
       setMobile(MG_DEFAULTS.mobile);
       setItems(MG_DEFAULTS.items);
     }
-  }, [style]);
+  }
+
+  function applyCustomer(c: Customer) {
+    setBillTo([c.name, c.institute, c.department, c.address].filter(Boolean).join('\n'));
+    setPhone(c.phone);
+    setEmail(c.email);
+  }
+
+  function handleSelectCustomer(id: string) {
+    setSelectedCustomerId(id);
+    const c = customers.find((x) => x.id === id);
+    if (c) applyCustomer(c);
+  }
+
+  async function handleAddCustomer() {
+    if (!newCustomer.name.trim()) {
+      setStatus({ kind: 'error', text: 'Customer name is required.' });
+      return;
+    }
+    setCustomerBusy(true);
+    try {
+      const created = await api<Customer>('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCustomer),
+      });
+      setCustomers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedCustomerId(created.id);
+      applyCustomer(created);
+      setNewCustomer(EMPTY_CUSTOMER);
+      setShowAddCustomer(false);
+      setStatus({ kind: 'ok', text: `Customer "${created.name}" added.` });
+    } catch (e) {
+      setStatus({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setCustomerBusy(false);
+    }
+  }
+
+  function handleSelectQuote(id: string) {
+    if (!id) {
+      setCurrentQuoteId(null);
+      return;
+    }
+    const q = savedQuotes.find((x) => x.id === id);
+    if (!q) return;
+    setStyle(q.style === 'MGEN' ? 'MGEN' : 'MG');
+    setCurrentQuoteId(q.id);
+    setSelectedCustomerId(q.customerId ?? '');
+    setQuoteNo(q.quoteNo);
+    setDate(q.date);
+    setBillTo(q.billTo);
+    setShipTo(q.shipTo);
+    setPhone(q.phone);
+    setFax(q.fax);
+    setEmail(q.email);
+    setValidity(q.validity);
+    setPayment(q.payment);
+    setDelivery(q.delivery);
+    setSalesperson(q.salesperson);
+    setMobile(q.mobile);
+    setItems(q.items.map((it) => ({ id: it.id, catNo: it.catNo, desc: it.desc, qty: it.qty, price: it.price })));
+    setStatus(null);
+  }
+
+  async function handleSaveQuote() {
+    setSaveBusy(true);
+    setStatus(null);
+    try {
+      const saved = await api<SavedQuote>('/api/quotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentQuoteId ?? undefined,
+          style,
+          quoteNo,
+          date,
+          billTo,
+          shipTo,
+          phone,
+          fax,
+          email,
+          validity,
+          payment,
+          delivery,
+          salesperson,
+          mobile,
+          customerId: selectedCustomerId || null,
+          items: items.map(({ catNo, desc, qty, price }) => ({ catNo, desc, qty, price })),
+        }),
+      });
+      setCurrentQuoteId(saved.id);
+      // Adopt the DB ids so later edits/saves line up with what is stored.
+      setItems(saved.items.map((it) => ({ id: it.id, catNo: it.catNo, desc: it.desc, qty: it.qty, price: it.price })));
+      await loadQuotes();
+      setStatus({ kind: 'ok', text: `Quotation ${saved.quoteNo} saved.` });
+    } catch (e) {
+      setStatus({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setSaveBusy(false);
+    }
+  }
 
   const handlePrint = () => window.print();
 
@@ -165,6 +357,80 @@ export function QuotationModule() {
   }
 
   const subtotal = items.reduce((acc, item) => acc + item.qty * item.price, 0);
+  const tax = 0;
+  const shipping = 0;
+  const total = subtotal + tax + shipping;
+
+  async function generateWordQuote() {
+    setWordBusy(true);
+    try {
+      const templatePath = style === 'MG' ? '/templates/MG_template.docx' : '/templates/MGEN_template.docx';
+      const response = await fetch(`${templatePath}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Template not found (${response.status}): ${templatePath}`);
+      }
+
+      const content = await response.arrayBuffer();
+      const zip = new PizZip(content);
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+      });
+
+      const mappedItems = items.map((item, index) => {
+        const lineTotal = item.qty * item.price;
+        return {
+          No: index + 1,
+          index: index + 1,
+          catNo: item.catNo,
+          desc: item.desc,
+          qty: money(item.qty),
+          price: money(item.price),
+          lineTotal: money(lineTotal),
+          total: money(lineTotal),
+        };
+      });
+
+      doc.render({
+        quoteNo,
+        date,
+        billTo,
+        shipTo,
+        phone,
+        fax,
+        email,
+        validity,
+        payment,
+        delivery,
+        salesperson,
+        mobile,
+        subtotal: money(subtotal),
+        total: money(total),
+        items: mappedItems,
+      });
+
+      // arraybuffer first: generating a "blob" directly corrupts the .docx on macOS.
+      const out = doc.getZip().generate({ type: 'arraybuffer' });
+      const blob = new Blob([out], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      saveAs(blob, quotationFileName(quoteNo));
+    } catch (error: any) {
+      console.error('Word quotation error:', error);
+      let errorMsg = error.message || 'Unknown error';
+
+      if (error.properties && error.properties.errors instanceof Array) {
+        const errorMessages = error.properties.errors.map((e: any) =>
+          `${e.name}: ${e.message} (Tag: ${e.properties?.id})`
+        ).join('\n');
+        errorMsg = `Template Tag Errors:\n${errorMessages}`;
+      }
+
+      window.alert(`Failed to generate Word quotation.\n${errorMsg}`);
+    } finally {
+      setWordBusy(false);
+    }
+  }
 
   const inputClass =
     'w-full bg-slate-800 text-white p-2 border border-slate-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-cyan-400 focus:border-cyan-400';
@@ -205,15 +471,41 @@ export function QuotationModule() {
           <span className="text-cyan-400">Quotation</span> Generator
         </h2>
 
+        {/* ---------- Drafts / Saved Quotes ---------- */}
+        <div className="mb-4">
+          <FieldLabel>Saved Quotations</FieldLabel>
+          <div className="flex gap-2">
+            <select className={inputClass} value={currentQuoteId ?? ''} onChange={(e) => handleSelectQuote(e.target.value)}>
+              <option value="">— New / unsaved quotation —</option>
+              {savedQuotes.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.quoteNo} · {q.style} · {(q.billTo.split('\n')[0] || 'No client').slice(0, 30)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={loadQuotes}
+              title="Refresh list"
+              className="px-3 rounded bg-slate-800 text-slate-300 hover:text-cyan-400 border border-slate-700 text-sm"
+            >
+              ↻
+            </button>
+          </div>
+          {currentQuoteId && (
+            <p className="text-[10px] font-mono text-cyan-500/80 mt-1">Editing saved quotation — Save will update it.</p>
+          )}
+        </div>
+
         <div className="flex gap-2 mb-2">
           <button
-            onClick={() => setStyle('MG')}
+            onClick={() => switchStyle('MG')}
             className={`flex-1 py-2 rounded font-bold text-sm transition-colors ${style === 'MG' ? 'bg-cyan-500 text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
           >
             MG Style
           </button>
           <button
-            onClick={() => setStyle('MGEN')}
+            onClick={() => switchStyle('MGEN')}
             className={`flex-1 py-2 rounded font-bold text-sm transition-colors ${style === 'MGEN' ? 'bg-cyan-500 text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
           >
             MGEN Style
@@ -235,6 +527,67 @@ export function QuotationModule() {
             <FieldLabel>Validity</FieldLabel>
             <input className={inputClass} value={validity} onChange={(e) => setValidity(e.target.value)} placeholder="e.g. 20.03.2024 or 90 days" />
           </div>
+        </div>
+
+        {/* ---------- Customer Book ---------- */}
+        <SectionHeading>Customer Book</SectionHeading>
+        <div className="space-y-3">
+          <div>
+            <FieldLabel>Select Saved Customer</FieldLabel>
+            <select className={inputClass} value={selectedCustomerId} onChange={(e) => handleSelectCustomer(e.target.value)}>
+              <option value="">— Choose a customer —</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.institute ? ` — ${c.institute}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddCustomer((v) => !v)}
+            className="w-full border border-dashed border-slate-600 hover:border-cyan-400 text-slate-400 hover:text-cyan-400 py-2 rounded text-xs font-bold uppercase tracking-wide transition-colors"
+          >
+            {showAddCustomer ? '− Cancel' : '+ Add Customer'}
+          </button>
+          {showAddCustomer && (
+            <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 space-y-2">
+              {(
+                [
+                  ['name', 'Name *'],
+                  ['institute', 'Institute'],
+                  ['department', 'Department'],
+                  ['phone', 'Phone'],
+                  ['email', 'Email'],
+                ] as const
+              ).map(([field, label]) => (
+                <div key={field}>
+                  <FieldLabel>{label}</FieldLabel>
+                  <input
+                    className={smallInputClass}
+                    value={newCustomer[field]}
+                    onChange={(e) => setNewCustomer((prev) => ({ ...prev, [field]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              <div>
+                <FieldLabel>Address</FieldLabel>
+                <textarea
+                  className={`${smallInputClass} h-16`}
+                  value={newCustomer.address}
+                  onChange={(e) => setNewCustomer((prev) => ({ ...prev, address: e.target.value }))}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddCustomer}
+                disabled={customerBusy}
+                className="w-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-900 font-bold py-2 rounded text-xs uppercase tracking-wide"
+              >
+                {customerBusy ? 'Saving…' : 'Save Customer'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ---------- Client Information ---------- */}
@@ -339,8 +692,28 @@ export function QuotationModule() {
         </div>
 
         <button
+          type="button"
+          onClick={handleSaveQuote}
+          disabled={saveBusy}
+          className="w-full mt-8 bg-violet-500 hover:bg-violet-400 disabled:opacity-50 text-white font-bold py-3 rounded-lg shadow-lg transition-colors"
+        >
+          {saveBusy ? 'Saving…' : currentQuoteId ? 'Update in Database' : 'Save to Database'}
+        </button>
+        {status && (
+          <p className={`mt-2 text-xs font-mono ${status.kind === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{status.text}</p>
+        )}
+        <button
+          type="button"
+          onClick={generateWordQuote}
+          disabled={wordBusy}
+          className="w-full mt-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 font-bold py-3 rounded-lg shadow-lg transition-colors"
+        >
+          {wordBusy ? 'Generating Word…' : 'Download Word Quotation'}
+        </button>
+        <button
+          type="button"
           onClick={handlePrint}
-          className="w-full mt-8 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded-lg shadow-lg transition-colors flex items-center justify-center gap-2"
+          className="w-full mt-3 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded-lg shadow-lg transition-colors flex items-center justify-center gap-2"
         >
           Print / Save to PDF
         </button>

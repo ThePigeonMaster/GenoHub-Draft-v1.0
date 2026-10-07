@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Customer Book
+model Customer {
+  id         String   @id @default(cuid())
+  name       String
+  institute  String   @default("")
+  department String   @default("")
+  address    String   @default("")
+  phone      String   @default("")
+  email      String   @default("")
+  createdAt  DateTime @default(now())
+
+  quotations Quotation[]
+}
+
+model Quotation {
+  id          String   @id @default(cuid())
+  quoteNo     String   @unique
+  style       String   @default("MG") // "MG" | "MGEN"
+  date        String
+  billTo      String   @default("")
+  shipTo      String   @default("")
+  phone       String   @default("")
+  fax         String   @default("")
+  email       String   @default("")
+  validity    String   @default("")
+  payment     String   @default("")
+  delivery    String   @default("")
+  salesperson String   @default("")
+  mobile      String   @default("")
+  subtotal    Float    @default(0)
+  total       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  items QuotationItem[]
+}
+
+model QuotationItem {
+  id          String @id @default(cuid())
+  position    Int    @default(0) // keeps the row order stable
+  catNo       String @default("")
+  desc        String @default("")
+  qty         Float  @default(1)
+  price       Float  @default(0)
+
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
+}
