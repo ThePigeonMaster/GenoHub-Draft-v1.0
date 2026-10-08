@@ -43,6 +43,9 @@ interface SavedQuote {
   items: { id: string; catNo: string; desc: string; qty: number; price: number }[];
 }
 
+// Where the route files live. '/api/v1' = app/api/v1/..., use '/api' if they are still in app/api/...
+const API_BASE = '/api/v1';
+
 const EMPTY_CUSTOMER = { name: '', institute: '', department: '', address: '', phone: '', email: '' };
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -193,7 +196,7 @@ export function QuotationModule() {
 
   async function loadCustomers() {
     try {
-      setCustomers(await api<Customer[]>('/api/v1/customers'));
+      setCustomers(await api<Customer[]>(`${API_BASE}/customers`));
     } catch (e) {
       setStatus({ kind: 'error', text: `Could not load customers: ${(e as Error).message}` });
     }
@@ -201,7 +204,7 @@ export function QuotationModule() {
 
   async function loadQuotes() {
     try {
-      setSavedQuotes(await api<SavedQuote[]>('/api/v1/quotations'));
+      setSavedQuotes(await api<SavedQuote[]>(`${API_BASE}/quotations`));
     } catch (e) {
       setStatus({ kind: 'error', text: `Could not load saved quotations: ${(e as Error).message}` });
     }
@@ -269,7 +272,7 @@ export function QuotationModule() {
     if (!window.confirm(`Delete saved quotation ${q.quoteNo}? This cannot be undone.`)) return;
     setSaveBusy(true);
     try {
-      await api<{ success: boolean }>(`/api/v1/quotations?id=${encodeURIComponent(q.id)}`, { method: 'DELETE' });
+      await api<{ success: boolean }>(`${API_BASE}/quotations?id=${encodeURIComponent(q.id)}`, { method: 'DELETE' });
       setCurrentQuoteId(null); // the form stays as an unsaved draft
       await loadQuotes();
       setStatus({ kind: 'ok', text: `Quotation ${q.quoteNo} deleted.` });
@@ -287,7 +290,7 @@ export function QuotationModule() {
     if (!window.confirm(`Delete customer "${c.name}"? Saved quotations are kept.`)) return;
     setCustomerBusy(true);
     try {
-      await api<{ success: boolean }>(`/api/v1/customers?id=${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+      await api<{ success: boolean }>(`${API_BASE}/customers?id=${encodeURIComponent(c.id)}`, { method: 'DELETE' });
       setSelectedCustomerId('');
       await loadCustomers();
       setStatus({ kind: 'ok', text: `Customer "${c.name}" deleted.` });
@@ -306,7 +309,7 @@ export function QuotationModule() {
     }
     setCustomerBusy(true);
     try {
-      const created = await api<Customer>('/api/v1/customers', {
+      const created = await api<Customer>(`${API_BASE}/customers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCustomer),
@@ -319,6 +322,7 @@ export function QuotationModule() {
       setStatus({ kind: 'ok', text: `Customer "${created.name}" added.` });
     } catch (e) {
       setStatus({ kind: 'error', text: (e as Error).message });
+      window.alert('Error saving customer: ' + (e as Error).message);
     } finally {
       setCustomerBusy(false);
     }
@@ -354,7 +358,7 @@ export function QuotationModule() {
     setSaveBusy(true);
     setStatus(null);
     try {
-      const saved = await api<SavedQuote>('/api/v1/quotations', {
+      const saved = await api<SavedQuote>(`${API_BASE}/quotations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
