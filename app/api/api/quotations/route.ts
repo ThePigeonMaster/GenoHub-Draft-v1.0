@@ -26,7 +26,7 @@ export async function GET() {
     });
     return NextResponse.json(quotations);
   } catch (error) {
-    return fail('GET /api/quotations', error);
+    return fail('GET /api/v1/quotations', error);
   }
 }
 
@@ -37,10 +37,10 @@ export async function POST(req: Request) {
 
     const quoteNo = str(body?.quoteNo).trim();
     if (!quoteNo) {
-      return fail('POST /api/quotations', new Error('Quotation No. is required'), 400);
+      return fail('POST /api/v1/quotations', new Error('Quotation No. is required'), 400);
     }
     if (!Array.isArray(body.items)) {
-      return fail('POST /api/quotations', new Error('items must be an array'), 400);
+      return fail('POST /api/v1/quotations', new Error('items must be an array'), 400);
     }
 
     // Plain scalar rows only: no ids, no quotationId. Prisma fills those in.
@@ -104,20 +104,20 @@ export async function POST(req: Request) {
   } catch (error) {
     const code = (error as { code?: string })?.code;
     if (code === 'P2002') {
-      return fail('POST /api/quotations', new Error('A quotation with this Quotation No. already exists.'), 409);
+      return fail('POST /api/v1/quotations', new Error('A quotation with this Quotation No. already exists.'), 409);
     }
     if (code === 'P2025') {
       return fail(
-        'POST /api/quotations',
+        'POST /api/v1/quotations',
         new Error('Record not found: the quotation or the selected customer no longer exists.'),
         404,
       );
     }
-    return fail('POST /api/quotations', error);
+    return fail('POST /api/v1/quotations', error);
   }
 }
 
-// DELETE /api/quotations?id=<quotationId>   (or JSON body: { "id": "<quotationId>" })
+// DELETE /api/v1/quotations?id=<quotationId>   (or JSON body: { "id": "<quotationId>" })
 export async function DELETE(request: Request) {
   try {
     let id = new URL(request.url).searchParams.get('id');
@@ -127,7 +127,7 @@ export async function DELETE(request: Request) {
       id = typeof body?.id === 'string' ? body.id : null;
     }
     if (!id) {
-      return fail('DELETE /api/quotations', new Error('Quotation id is required'), 400);
+      return fail('DELETE /api/v1/quotations', new Error('Quotation id is required'), 400);
     }
 
     // QuotationItem.quotationId is onDelete: Cascade, so the items are removed with it.
@@ -135,8 +135,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error) {
     if ((error as { code?: string })?.code === 'P2025') {
-      return fail('DELETE /api/quotations', new Error('Quotation not found (already deleted?)'), 404);
+      return fail('DELETE /api/v1/quotations', new Error('Quotation not found (already deleted?)'), 404);
     }
-    return fail('DELETE /api/quotations', error);
+    return fail('DELETE /api/v1/quotations', error);
   }
 }

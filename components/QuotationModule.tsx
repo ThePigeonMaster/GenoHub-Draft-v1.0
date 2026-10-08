@@ -126,12 +126,12 @@ const MG_DEFAULTS = {
   shipTo: 'Assc. Prof. Dr. Nurul Asma Abdullah\nHealth Campus\nUniversity Sains Malaysia\n16150 Kubang Kerian\nKelantan Darul Naim\nMalaysia',
   phone: '+60 12 - 238 0658',
   fax: '',
-  email: 'ngatijah@moleculargenomics.com.my',
-  validity: '09.10.2026',
+  email: 'pohkheng_ng@genomax.com.my',
+  validity: '20.03.2024',
   payment: 'Prepayment',
   delivery: '8',
-  salesperson: 'Ms. Ngatijah Saimin',
-  mobile: '+60 13 - 441 0298',
+  salesperson: 'Dr. Ng Poh Kheng',
+  mobile: '+60 12 - 238 0658',
   items: [
     { id: 'item-1', catNo: 'BZS_041', desc: 'Cap Insert for 2 mL Cryogenic Vial, Red\nSize: 100 units/pack', qty: 2, price: 35.0 },
     { id: 'item-2', catNo: 'BZS_048', desc: 'Cap Insert for 2 mL Cryogenic Vial, Red\nSize: 100 units/pack', qty: 2, price: 35.0 },
@@ -149,8 +149,8 @@ const MGEN_DEFAULTS = {
   validity: '90 days',
   payment: '30 days',
   delivery: '06-08',
-  salesperson: 'Pn. Suraiti binti Abdul Wahab',
-  mobile: '+60 13 - 211 0871',
+  salesperson: 'Dr. Ng Poh Kheng',
+  mobile: '+60 12 - 238 0658',
   items: [
     { id: 'item-1', catNo: 'VR100', desc: 'Viral Nucleic Acid Extraction Kit II\nSize: 100 preps/kit', qty: 4, price: 997.5 },
     { id: 'item-2', catNo: 'MRX_1203103', desc: 'MiRXES BlitzAmp cDNA Synthesis System\nSize: 60 rxns', qty: 7, price: 1430.0 },
@@ -193,7 +193,7 @@ export function QuotationModule() {
 
   async function loadCustomers() {
     try {
-      setCustomers(await api<Customer[]>('/api/customers'));
+      setCustomers(await api<Customer[]>('/api/v1/customers'));
     } catch (e) {
       setStatus({ kind: 'error', text: `Could not load customers: ${(e as Error).message}` });
     }
@@ -201,7 +201,7 @@ export function QuotationModule() {
 
   async function loadQuotes() {
     try {
-      setSavedQuotes(await api<SavedQuote[]>('/api/quotations'));
+      setSavedQuotes(await api<SavedQuote[]>('/api/v1/quotations'));
     } catch (e) {
       setStatus({ kind: 'error', text: `Could not load saved quotations: ${(e as Error).message}` });
     }
@@ -250,7 +250,9 @@ export function QuotationModule() {
   }
 
   function applyCustomer(c: Customer) {
-    setBillTo([c.name, c.institute, c.department, c.address].filter(Boolean).join('\n'));
+    const addressBlock = [c.name, c.institute, c.department, c.address].filter(Boolean).join('\n');
+    setBillTo(addressBlock);
+    setShipTo(addressBlock); // Ship To mirrors Bill To (still editable afterwards)
     setPhone(c.phone);
     setEmail(c.email);
   }
@@ -267,7 +269,7 @@ export function QuotationModule() {
     if (!window.confirm(`Delete saved quotation ${q.quoteNo}? This cannot be undone.`)) return;
     setSaveBusy(true);
     try {
-      await api<{ success: boolean }>(`/api/quotations?id=${encodeURIComponent(q.id)}`, { method: 'DELETE' });
+      await api<{ success: boolean }>(`/api/v1/quotations?id=${encodeURIComponent(q.id)}`, { method: 'DELETE' });
       setCurrentQuoteId(null); // the form stays as an unsaved draft
       await loadQuotes();
       setStatus({ kind: 'ok', text: `Quotation ${q.quoteNo} deleted.` });
@@ -285,7 +287,7 @@ export function QuotationModule() {
     if (!window.confirm(`Delete customer "${c.name}"? Saved quotations are kept.`)) return;
     setCustomerBusy(true);
     try {
-      await api<{ success: boolean }>(`/api/customers?id=${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+      await api<{ success: boolean }>(`/api/v1/customers?id=${encodeURIComponent(c.id)}`, { method: 'DELETE' });
       setSelectedCustomerId('');
       await loadCustomers();
       setStatus({ kind: 'ok', text: `Customer "${c.name}" deleted.` });
@@ -304,7 +306,7 @@ export function QuotationModule() {
     }
     setCustomerBusy(true);
     try {
-      const created = await api<Customer>('/api/customers', {
+      const created = await api<Customer>('/api/v1/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCustomer),
@@ -352,7 +354,7 @@ export function QuotationModule() {
     setSaveBusy(true);
     setStatus(null);
     try {
-      const saved = await api<SavedQuote>('/api/quotations', {
+      const saved = await api<SavedQuote>('/api/v1/quotations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -513,7 +515,7 @@ export function QuotationModule() {
 
         {/* ---------- Drafts / Saved Quotes ---------- */}
         <div className="mb-4">
-          <FieldLabel>Saved Quotations</FieldLabel>
+          <FieldLabel>Load Saved Quotation</FieldLabel>
           <div className="flex gap-2">
             <select className={inputClass} value={currentQuoteId ?? ''} onChange={(e) => handleSelectQuote(e.target.value)}>
               <option value="">— New / unsaved quotation —</option>

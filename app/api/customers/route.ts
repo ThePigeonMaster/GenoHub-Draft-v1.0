@@ -17,7 +17,7 @@ export async function GET() {
     const customers = await prisma.customer.findMany({ orderBy: { name: 'asc' } });
     return NextResponse.json(customers);
   } catch (error) {
-    return fail('GET /api/customers', error);
+    return fail('GET /api/v1/customers', error);
   }
 }
 
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const name = str(body?.name);
     if (!name) {
-      return fail('POST /api/customers', new Error('Customer name is required'), 400);
+      return fail('POST /api/v1/customers', new Error('Customer name is required'), 400);
     }
 
     const customer = await prisma.customer.create({
@@ -41,11 +41,11 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(customer, { status: 201 });
   } catch (error) {
-    return fail('POST /api/customers', error);
+    return fail('POST /api/v1/customers', error);
   }
 }
 
-// DELETE /api/customers?id=<customerId>   (or JSON body: { "id": "<customerId>" })
+// DELETE /api/v1/customers?id=<customerId>   (or JSON body: { "id": "<customerId>" })
 export async function DELETE(request: Request) {
   try {
     let id = new URL(request.url).searchParams.get('id');
@@ -55,7 +55,7 @@ export async function DELETE(request: Request) {
       id = typeof body?.id === 'string' ? body.id : null;
     }
     if (!id) {
-      return fail('DELETE /api/customers', new Error('Customer id is required'), 400);
+      return fail('DELETE /api/v1/customers', new Error('Customer id is required'), 400);
     }
 
     // Quotation.customerId is onDelete: SetNull, so saved quotations are kept.
@@ -63,8 +63,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error) {
     if ((error as { code?: string })?.code === 'P2025') {
-      return fail('DELETE /api/customers', new Error('Customer not found (already deleted?)'), 404);
+      return fail('DELETE /api/v1/customers', new Error('Customer not found (already deleted?)'), 404);
     }
-    return fail('DELETE /api/customers', error);
+    return fail('DELETE /api/v1/customers', error);
   }
 }
